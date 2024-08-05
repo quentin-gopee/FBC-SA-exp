@@ -7,7 +7,7 @@ from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
 
 
-@DATASET_REGISTRY.register()
+@DATASET_REGISTRY.register(force=True)
 class SSDGPACS(DatasetBase):
     """PACS.
 
@@ -50,7 +50,7 @@ class SSDGPACS(DatasetBase):
         src_domains = cfg.DATASET.SOURCE_DOMAINS
         tgt_domain = cfg.DATASET.TARGET_DOMAINS[0]
 
-        if cfg.DATASET.RANDOM:
+        if cfg.TRAINER.FBASA.RANDOM_LABEL:
             split_ssdg_path = osp.join(
                 self.split_ssdg_dir, f"{tgt_domain}_nlab{num_labeled}_random_seed{seed}.json"
             )
