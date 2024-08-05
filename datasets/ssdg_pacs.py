@@ -1,6 +1,7 @@
 import os.path as osp
 import random
 from collections import defaultdict
+import numpy as np
 
 from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
@@ -44,24 +45,42 @@ class SSDGPACS(DatasetBase):
         self.check_input_domains(cfg.DATASET.SOURCE_DOMAINS, cfg.DATASET.TARGET_DOMAINS)
 
         seed = cfg.SEED
+        random.seed(seed)
         num_labeled = cfg.DATASET.NUM_LABELED
         src_domains = cfg.DATASET.SOURCE_DOMAINS
         tgt_domain = cfg.DATASET.TARGET_DOMAINS[0]
-        split_ssdg_path = osp.join(
-            self.split_ssdg_dir, f"{tgt_domain}_nlab{num_labeled}_seed{seed}.json"
-        )
 
-        if not osp.exists(split_ssdg_path):
-            train_x, train_u = self._read_data_train(
-                cfg.DATASET.SOURCE_DOMAINS, num_labeled
+        if cfg.DATASET.RANDOM:
+            split_ssdg_path = osp.join(
+                self.split_ssdg_dir, f"{tgt_domain}_nlab{num_labeled}_random_seed{seed}.json"
             )
-            self.write_json_train(
-                split_ssdg_path, src_domains, self.image_dir, train_x, train_u
-            )
+            if not osp.exists(split_ssdg_path):
+                train_x, train_u = self._read_data_train_random(
+                    cfg.DATASET.SOURCE_DOMAINS, num_labeled
+                )
+                self.write_json_train(
+                    split_ssdg_path, src_domains, self.image_dir, train_x, train_u
+                )
+            else:
+                train_x, train_u = self.read_json_train(
+                    split_ssdg_path, src_domains, self.image_dir
+                )
         else:
-            train_x, train_u = self.read_json_train(
-                split_ssdg_path, src_domains, self.image_dir
+            split_ssdg_path = osp.join(
+                self.split_ssdg_dir, f"{tgt_domain}_nlab{num_labeled}_seed{seed}.json"
             )
+            if not osp.exists(split_ssdg_path):
+                train_x, train_u = self._read_data_train(
+                    cfg.DATASET.SOURCE_DOMAINS, num_labeled
+                )
+                self.write_json_train(
+                    split_ssdg_path, src_domains, self.image_dir, train_x, train_u
+                )
+            else:
+                train_x, train_u = self.read_json_train(
+                    split_ssdg_path, src_domains, self.image_dir
+                )
+        
         val = self._read_data_test(cfg.DATASET.SOURCE_DOMAINS, "crossval")
         test = self._read_data_test(cfg.DATASET.TARGET_DOMAINS, "all")
 
@@ -156,6 +175,51 @@ class SSDGPACS(DatasetBase):
                         items_u.append(item)
 
         return items_x, items_u
+    
+    def _read_data_train_random(self, input_domains, num_labeled):
+        num_labeled_per_cd = None
+        num_domains = len(input_domains)
+        items_x, items_u = [], []
+
+        # Get number of labels
+        file = osp.join(self.split_dir, input_domains[0] + "_train_kfold.txt")
+        impath_label_list = self._read_split_pacs(file)
+
+        impath_label_dict = defaultdict(list)
+
+        for impath, label in impath_label_list:
+            impath_label_dict[label].append((impath, label))
+
+        labels = list(impath_label_dict.keys())     
+
+        # Number of labeled samples per class and domain
+        num_labeled_per_cd = self.random_numbers(num_labeled, num_domains*len(labels))
+        num_labeled_per_cd= np.array(num_labeled_per_cd).reshape(num_domains, len(labels))
+
+        for domain, dname in enumerate(input_domains):
+            file = osp.join(self.split_dir, dname + "_train_kfold.txt")
+            impath_label_list = self._read_split_pacs(file)
+
+            impath_label_dict = defaultdict(list)
+
+            for impath, label in impath_label_list:
+                impath_label_dict[label].append((impath, label))
+
+            labels = list(impath_label_dict.keys())            
+
+            for label in labels:
+                pairs = impath_label_dict[label]
+                assert len(pairs) >= num_labeled_per_cd[domain][label], "Not enough labeled data for class {} in domain {}".format(label, dname)
+                random.shuffle(pairs)
+
+                for i, (impath, label) in enumerate(pairs):
+                    item = Datum(impath=impath, label=label, domain=domain)
+                    if (i + 1) <= num_labeled_per_cd[domain][label]:
+                        items_x.append(item)
+                    else:
+                        items_u.append(item)
+
+        return items_x, items_u
 
     def _read_data_test(self, input_domains, split):
         items = []
@@ -192,3 +256,11 @@ class SSDGPACS(DatasetBase):
                 items.append((impath, label))
 
         return items
+    
+    def random_numbers(self, n_sum, n_numbers):
+        '''
+        Generates a list of n_numbers random numbers between 1 and num_labeled-1 that sum to n_num
+        '''
+        rand_num = np.sort(random.sample(range(1, n_sum), n_numbers-1))
+        num_labeled_per_class = [rand_num[0]] + [rand_num[i] - rand_num[i-1] for i in range(1, len(rand_num))] + [n_sum-rand_num[-1]]
+        return num_labeled_per_class

@@ -60,14 +60,14 @@ class FBCSA(TrainerXU):
         choices = cfg.TRAINER.FBASA.STRONG_TRANSFORMS
         tfm_train_strong = build_transform(cfg, is_train=True, choices=choices)
         custom_tfm_train += [tfm_train_strong]
-        dm = DataManager(self.cfg, custom_tfm_train=custom_tfm_train)
-        self.train_loader_x = dm.train_loader_x
-        self.train_loader_u = dm.train_loader_u
-        self.val_loader = dm.val_loader
-        self.test_loader = dm.test_loader
-        self.num_classes = dm.num_classes
-        self.num_source_domains = dm.num_source_domains
-        self.lab2cname = dm.lab2cname
+        self.dm = DataManager(self.cfg, custom_tfm_train=custom_tfm_train)
+        self.train_loader_x = self.dm.train_loader_x
+        self.train_loader_u = self.dm.train_loader_u
+        self.val_loader = self.dm.val_loader
+        self.test_loader = self.dm.test_loader
+        self.num_classes = self.dm.num_classes
+        self.num_source_domains = self.dm.num_source_domains
+        self.lab2cname = self.dm.lab2cname
 
     def build_model(self):
         cfg = self.cfg
