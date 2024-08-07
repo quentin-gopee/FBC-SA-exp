@@ -275,8 +275,6 @@ class FBCSA(TrainerXU):
         # NOTE: If num_source_domains=1, we split a batch into two halves
         K = 2 if K == 1 else K
         global_feat = []
-        
-        breakpoint()
 
         for i in range(K):
             idx = d == i
