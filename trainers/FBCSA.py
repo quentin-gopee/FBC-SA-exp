@@ -112,7 +112,6 @@ class FBCSA(TrainerXU):
         K = self.num_source_domains
         # NOTE: If num_source_domains=1, we split a batch into two halves
         K = 2 if K == 1 else K
-
         ####################
         # Generate pseudo labels & simillarity based labels
         ####################
@@ -221,7 +220,7 @@ class FBCSA(TrainerXU):
     
         loss_all += loss_u_sim
         loss_summary["loss_SA"] = loss_u_sim.item()
-
+        
         self.model_backward_and_update(loss_all)
 
         loss_summary["y_u_pred_acc_thre"] = y_u_pred_stats["acc_thre"]
@@ -257,7 +256,7 @@ class FBCSA(TrainerXU):
         K = self.num_source_domains
         # NOTE: If num_source_domains=1, we split a batch into two halves
         K = 2 if K == 1 else K
-
+        breakpoint()
         global_feat = []
 
         for i in range(K):
@@ -274,6 +273,7 @@ class FBCSA(TrainerXU):
                 f.append(z.mean(dim=0))
             feat = torch.stack(f)
             global_feat.append(feat)
+            breakpoint()
 
         self.feat = torch.cat(global_feat, dim=0).chunk(K)
 

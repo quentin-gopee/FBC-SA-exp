@@ -193,8 +193,9 @@ class SSDGPACS(DatasetBase):
         labels = list(impath_label_dict.keys())     
 
         # Number of labeled samples per class and domain
-        num_labeled_per_cd = self.random_numbers(num_labeled, num_domains*len(labels))
-        num_labeled_per_cd= np.array(num_labeled_per_cd).reshape(num_domains, len(labels))
+        num_labeled_per_cd = []
+        for d in range(num_domains):
+            num_labeled_per_cd.append(self.random_numbers(num_labeled, len(labels)))
 
         for domain, dname in enumerate(input_domains):
             file = osp.join(self.split_dir, dname + "_train_kfold.txt")
@@ -259,7 +260,7 @@ class SSDGPACS(DatasetBase):
     
     def random_numbers(self, n_sum, n_numbers):
         '''
-        Generates a list of n_numbers random numbers between 1 and num_labeled-1 that sum to n_num
+        Generates a list of n_numbers random numbers between 1 and num_sum-n_numbers that sum to n_num
         '''
         rand_num = np.sort(random.sample(range(1, n_sum), n_numbers-1))
         num_labeled_per_class = [rand_num[0]] + [rand_num[i] - rand_num[i-1] for i in range(1, len(rand_num))] + [n_sum-rand_num[-1]]
