@@ -45,7 +45,6 @@ class SSDGPACS(DatasetBase):
         self.check_input_domains(cfg.DATASET.SOURCE_DOMAINS, cfg.DATASET.TARGET_DOMAINS)
 
         seed = cfg.SEED
-        random.seed(seed)
         num_labeled = cfg.DATASET.NUM_LABELED
         src_domains = cfg.DATASET.SOURCE_DOMAINS
         tgt_domain = cfg.DATASET.TARGET_DOMAINS[0]
@@ -176,8 +175,8 @@ class SSDGPACS(DatasetBase):
 
         return items_x, items_u
     
-    def _read_data_train_random(self, input_domains, num_labeled):
-        num_labeled_per_cd = None
+    def _read_data_train_random(self, input_domains, num_labelled):
+        num_labelled_per_cd = None
         num_domains = len(input_domains)
         items_x, items_u = [], []
 
@@ -192,10 +191,11 @@ class SSDGPACS(DatasetBase):
 
         labels = list(impath_label_dict.keys())     
 
-        # Number of labeled samples per class and domain
-        num_labeled_per_cd = []
+        # Number of labelled samples per class and domain
+        num_labelled_per_domain= num_labelled // num_domains
+        num_labelled_per_cd = []
         for d in range(num_domains):
-            num_labeled_per_cd.append(self.random_numbers(num_labeled, len(labels)))
+            num_labelled_per_cd.append(self.random_numbers(num_labelled_per_domain, len(labels)))
 
         for domain, dname in enumerate(input_domains):
             file = osp.join(self.split_dir, dname + "_train_kfold.txt")
@@ -210,12 +210,12 @@ class SSDGPACS(DatasetBase):
 
             for label in labels:
                 pairs = impath_label_dict[label]
-                assert len(pairs) >= num_labeled_per_cd[domain][label], "Not enough labeled data for class {} in domain {}".format(label, dname)
+                assert len(pairs) >= num_labelled_per_cd[domain][label], "Not enough labeled data for class {} in domain {}".format(label, dname)
                 random.shuffle(pairs)
 
                 for i, (impath, label) in enumerate(pairs):
                     item = Datum(impath=impath, label=label, domain=domain)
-                    if (i + 1) <= num_labeled_per_cd[domain][label]:
+                    if (i + 1) <= num_labelled_per_cd[domain][label]:
                         items_x.append(item)
                     else:
                         items_u.append(item)
