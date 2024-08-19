@@ -95,9 +95,6 @@ class SSDGPACS(DatasetBase):
                     split_ssdg_path, src_domains, self.image_dir
                 )
         
-        train_x, train_u = self._read_data_train_exp_imbalance(
-            cfg.DATASET.SOURCE_DOMAINS, num_labeled, cfg.TRAINER.FBASA.GAMMA
-        )
         val = self._read_data_test(cfg.DATASET.SOURCE_DOMAINS, "crossval")
         test = self._read_data_test(cfg.DATASET.TARGET_DOMAINS, "all")
 
@@ -261,8 +258,12 @@ class SSDGPACS(DatasetBase):
         num_labeled_per_class = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
 
         # Number of unlabelled samples per class
-        m1 = len(impath_label_dict[0]) - num_labeled_per_class[0]*num_domains
+        random.shuffle(labels) # randomize the majority class
+        m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_class[labels[0]]*num_domains
         num_unlabeled_per_class = self.exp_imbalance_u(m1, len(labels), gamma)
+
+        num_labeled_per_class = [num_labeled_per_class[label] for label in labels]
+        num_unlabeled_per_class = [num_unlabeled_per_class[label] for label in labels]
 
         for domain, dname in enumerate(input_domains):
             file = osp.join(self.split_dir, dname + "_train_kfold.txt")
