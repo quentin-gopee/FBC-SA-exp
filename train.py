@@ -69,7 +69,8 @@ def extend_cfg(cfg, args):
     cfg.TRAINER.FBASA.STRONG_TRANSFORMS = ()  # strong augmentations
     cfg.TRAINER.FBASA.C_OPTIM = copy.deepcopy(cfg.OPTIM)  # classifier's optim setting
     cfg.TRAINER.FBASA.CLASSIFIER = "normal"  # stochastic or normal
-    cfg.TRAINER.FBASA.RANDOM_LABEL = args.random_label  # randomize the number of labels per class
+    cfg.TRAINER.FBASA.IMBALANCE = args.imbalance  # class imbalance type
+    cfg.TRAINER.FBASA.GAMMA = args.gamma  # class imbalance ratio
 
 
 
@@ -169,9 +170,16 @@ if __name__ == "__main__":
         "--no-train", action="store_true", help="do not call trainer.train()"
     )
     parser.add_argument(
-        "--random-label",
-        action="store_true",
+        "--imbalance",
+        type=str,
+        default="uniform",
         help="randomize the number of labels per class"
+    )
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        default=None,
+        help="class imbalance ratio"
     )
     parser.add_argument(
         "opts",
