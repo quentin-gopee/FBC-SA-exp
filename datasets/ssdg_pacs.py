@@ -7,7 +7,7 @@ from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
 
 
-@DATASET_REGISTRY.register()
+@DATASET_REGISTRY.register(force=True)
 class SSDGPACS(DatasetBase):
     """PACS.
 
@@ -111,7 +111,7 @@ class SSDGPACS(DatasetBase):
                 domain = item.domain
                 dname = src_domains[domain]
                 impath = impath.replace(image_dir, "")
-                if impath.startswith("/"):
+                if impath.startswith("/") or impath.startswith("\\"):
                     impath = impath[1:]
                 out.append((impath, label, dname))
             return out
