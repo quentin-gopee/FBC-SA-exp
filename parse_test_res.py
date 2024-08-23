@@ -53,6 +53,7 @@ import numpy as np
 import os.path as osp
 import argparse
 from collections import OrderedDict, defaultdict
+import ast
 
 from dassl.utils import check_isfile, listdir_nohidden
 
@@ -67,18 +68,26 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
     subdirs = listdir_nohidden(directory, sort=True)
 
     outputs = []
+    sorted_accuracies = defaultdict(list)
 
     for subdir in subdirs:
         fpath = osp.join(directory, subdir, "log.txt")
         assert check_isfile(fpath)
         good_to_go = False
         output = OrderedDict()
+        labeled_dict = None
 
         with open(fpath, "r") as f:
             lines = f.readlines()
 
             for line in lines:
                 line = line.strip()
+
+                if 'Class distribution in the labeled training set:' in line:
+                    labeled_dist_line = next(f).strip()
+                    labeled_dict = ast.literal_eval(labeled_dist_line.split('defaultdict(<class \'int\'>, ')[1].rstrip(')'))
+                    # argsort the labeled_dict in descending order
+                    sorted_labels_idx = np.argsort(list(labeled_dict.values()))[::-1]
 
                 if line == end_signal:
                     good_to_go = True
@@ -92,8 +101,21 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
                         name = metric["name"]
                         output[name] = num
 
+                if '=> per-class result' in line:
+                    while True:
+                        next_line = next(f).strip()
+                        match = re.match(r'\* class: (\d+) \(\)\ttotal: \d+\tcorrect: \d+\tacc: ([\d\.]+)%', next_line)
+                        if match:
+                            class_id = int(match.group(1))
+                            accuracy = float(match.group(2))
+                            sorted_accuracies[sorted_labels_idx[class_id]].append(accuracy)
+                        elif next_line.startswith('* average:'):
+                            break
+
         if output:
             outputs.append(output)
+        
+
 
     assert len(outputs) > 0, f"Nothing found in {directory}"
 
@@ -117,7 +139,7 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
         output_results[key] = avg
     print("===")
 
-    return output_results
+    return output_results, sorted_accuracies
 
 
 def main(args, end_signal):
@@ -128,20 +150,31 @@ def main(args, end_signal):
 
     if args.multi_exp:
         final_results = defaultdict(list)
+        sorted_accuracies = defaultdict(list)
 
         for directory in listdir_nohidden(args.directory, sort=True):
             directory = osp.join(args.directory, directory)
-            results = parse_function(
+            results, sa = parse_function(
                 metric, directory=directory, args=args, end_signal=end_signal
             )
 
             for key, value in results.items():
                 final_results[key].append(value)
 
+            for key, value in sa.items():
+                sorted_accuracies[key].extend(value)
+
         print("Average performance")
         for key, values in final_results.items():
             avg = np.mean(values)
-            print(f"* {key}: {avg:.1f}%")
+            std = compute_ci95(values) if args.ci95 else np.std(values)
+            print(f"* {key}: {avg:.1f}% +- {std:.1f}%")
+
+        print("Imbalanced class performance")
+        for key, values in sorted_accuracies.items():
+            avg = np.mean(values)
+            std = compute_ci95(values) if args.ci95 else np.std(values)
+            print(f"* class N{key}: {avg:.1f}% +- {std:.1f}%")
 
     else:
         parse_function(
@@ -171,8 +204,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    end_signal = "Finish training"  # needs to be adapted to the latest
-    if args.test_log:
-        end_signal = "=> result"
+    end_signal = "=> result"
 
     main(args, end_signal)
