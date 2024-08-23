@@ -54,6 +54,7 @@ import os.path as osp
 import argparse
 from collections import OrderedDict, defaultdict
 import ast
+import glob
 
 from dassl.utils import check_isfile, listdir_nohidden
 
@@ -72,6 +73,8 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
 
     for subdir in subdirs:
         fpath = osp.join(directory, subdir, "log.txt")
+        if args.pattern:
+            fpath = glob.glob(args.pattern)[-1]
         assert check_isfile(fpath)
         good_to_go = False
         output = OrderedDict()
@@ -201,6 +204,12 @@ if __name__ == "__main__":
         default="accuracy",
         type=str,
         help="which keyword to extract"
+    )
+    parser.add_argument(
+        "--pattern",
+        default="",
+        type=str,
+        help="pattern to match the log file"
     )
     args = parser.parse_args()
 
