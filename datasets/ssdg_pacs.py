@@ -7,7 +7,7 @@ from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
 
 
-@DATASET_REGISTRY.register(force=True)
+@DATASET_REGISTRY.register()
 class SSDGPACS(DatasetBase):
     """PACS.
 
@@ -66,6 +66,12 @@ class SSDGPACS(DatasetBase):
 
         if cfg.DATASET.ALL_AS_UNLABELED:
             train_u = train_u + train_x
+
+        # Print class distribution
+        print("Class distribution in the labeled training set:")
+        print(self.count_classes(train_x))
+        print("Class distribution in the unlabeled training set:")
+        print(self.count_classes(train_u))
 
         super().__init__(train_x=train_x, train_u=train_u, val=val, test=test)
 
@@ -167,6 +173,7 @@ class SSDGPACS(DatasetBase):
         elif imbalance == "exp_l_only":
             num_labeled_per_domain = num_labeled // num_domains
             num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+            random.shuffle(labels) # randomize the majority class
             num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
 
         # Uniform distribution with the same number of unlabeled samples as in the exponential imbalance to compare both settings
@@ -290,3 +297,9 @@ class SSDGPACS(DatasetBase):
             n_samples.append(int(m1*gamma**(-i/(C-1))))
 
         return n_samples
+
+    def count_classes(self, items):
+        class_count = defaultdict(int)
+        for item in items:
+            class_count[item.label] += 1
+        return class_count
