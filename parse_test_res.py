@@ -74,9 +74,11 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
     for subdir in subdirs:
         fpath = osp.join(directory, subdir, "log.txt")
         if args.pattern:
-            fpath = glob.glob(args.pattern)[-1]
+            fpath = glob.glob(osp.join(directory, subdir, args.pattern))[-1]
         assert check_isfile(fpath)
-        good_to_go = False
+        class_distribution = False
+        results = False
+        per_class_results = False
         output = OrderedDict()
         labeled_dict = None
 
@@ -87,33 +89,41 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
                 line = line.strip()
 
                 if 'Class distribution in the labeled training set:' in line:
-                    labeled_dist_line = next(f).strip()
-                    labeled_dict = ast.literal_eval(labeled_dist_line.split('defaultdict(<class \'int\'>, ')[1].rstrip(')'))
+                    class_distribution = True
+                    continue
+
+                if class_distribution:
+                    labeled_dict = ast.literal_eval(line.split('defaultdict(<class \'int\'>, ')[1].rstrip(')'))
                     # argsort the labeled_dict in descending order
                     sorted_labels_idx = np.argsort(list(labeled_dict.values()))[::-1]
+                    class_distribution = False
+                    continue
 
                 if line == end_signal:
-                    good_to_go = True
+                    results = True
+                    continue
 
                 for metric in metrics:
                     match = metric["regex"].search(line)
-                    if match and good_to_go:
+                    if match and results:
                         if "file" not in output:
                             output["file"] = fpath
                         num = float(match.group(1))
                         name = metric["name"]
                         output[name] = num
+                    continue
 
                 if '=> per-class result' in line:
-                    while True:
-                        next_line = next(f).strip()
-                        match = re.match(r'\* class: (\d+) \(\)\ttotal: \d+\tcorrect: \d+\tacc: ([\d\.]+)%', next_line)
-                        if match:
-                            class_id = int(match.group(1))
-                            accuracy = float(match.group(2))
-                            sorted_accuracies[sorted_labels_idx[class_id]].append(accuracy)
-                        elif next_line.startswith('* average:'):
-                            break
+                    per_class_results = True
+                    continue
+                
+                if per_class_results:
+                    match = re.match(r'\* class: (\d+) \(\)\ttotal: \d+\tcorrect: \d+\tacc: ([\d\.]+)%', line)
+                    if match:
+                        class_id = int(match.group(1))
+                        accuracy = float(match.group(2))
+                        sorted_accuracies[sorted_labels_idx[class_id]].append(accuracy)
+                    continue
 
         if output:
             outputs.append(output)
@@ -141,6 +151,8 @@ def parse_function(*metrics, directory="", args=None, end_signal=None):
         print(f"* average {key}: {avg:.1f}% +- {std:.1f}%")
         output_results[key] = avg
     print("===")
+
+    print(sorted_accuracies)
 
     return output_results, sorted_accuracies
 
