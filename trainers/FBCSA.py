@@ -47,6 +47,7 @@ class FBCSA(TrainerXU):
             norm_mean = cfg.INPUT.PIXEL_MEAN
             norm_std = cfg.INPUT.PIXEL_STD
 
+        self.alpha = cfg.TRAINER.FBASA.ALPHA
 
     def check_cfg(self, cfg):
         assert len(cfg.TRAINER.FBASA.STRONG_TRANSFORMS) > 0
@@ -172,6 +173,10 @@ class FBCSA(TrainerXU):
         loss_u_aug = 0
         loss_u_feat_clas = 0
         loss_u_sim = 0
+        mutual_info_loss = 0
+        H_alpha_loss = 0
+        H_alpha_marginal_loss = 0
+
         for k in range(K):
             y_xu_k_pred = y_xu_pred[k]
             mask_xu_k = mask_xu[k]
@@ -218,6 +223,20 @@ class FBCSA(TrainerXU):
             loss_sim = (loss_sim * mask_xu_k).mean()
             loss_u_sim += loss_sim * 0.5
 
+            # Mutual Information Loss
+            if self.alpha:
+                p_xu_k_aug = F.softmax(z_xu_k_aug, dim=1)
+                if self.alpha == 1:
+                    H_alpha = -(p_xu_k_aug * torch.log(p_xu_k_aug + 1e-9)).sum(dim=1).mean()
+                    p_xu_k_marginal = p_xu_k_aug.mean(dim=0)
+                    H_alpha_marginal = -(p_xu_k_marginal * torch.log(p_xu_k_marginal + 1e-9)).sum()
+                else:
+                    H_alpha = (p_xu_k_aug ** self.alpha).sum(dim=1).mean()
+                    H_alpha_marginal = p_xu_k_aug.mean(dim=0).pow(self.alpha).sum()
+                H_alpha_loss += H_alpha # Entropy of Y given X
+                H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
+                mutual_info_loss += (H_alpha - H_alpha_marginal) / (self.alpha - 1)
+
         loss_summary = {}
 
         loss_all = 0
@@ -232,6 +251,14 @@ class FBCSA(TrainerXU):
     
         loss_all += loss_u_sim
         loss_summary["loss_SA"] = loss_u_sim.item()
+
+        if self.alpha:
+            loss_all -= mutual_info_loss  # Subtract mutual information loss
+            loss_summary["mutual_info_loss"] = mutual_info_loss.item()
+
+            # log H_alpha and H_alpha_marginal
+            loss_summary["H_alpha"] = H_alpha_loss.item()
+            loss_summary["H_alpha_marginal"] = H_alpha_marginal_loss.item()
 
         # if loss_all contains NaN
         if (loss_all != loss_all).data.any():

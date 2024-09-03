@@ -62,6 +62,11 @@ def reset_cfg(cfg, args):
     if args.head:
         cfg.MODEL.HEAD.NAME = args.head
 
+    if args.alpha:
+        cfg.TRAINER.FBASA.ALPHA = args.alpha
+    else:
+        cfg.TRAINER.FBASA.ALPHA = None
+
 
 def extend_cfg(cfg, args):
     cfg.TRAINER.FBASA = CN()
@@ -186,6 +191,12 @@ if __name__ == "__main__":
         default=None,
         nargs=argparse.REMAINDER,
         help="modify config options using the command-line",
+    )
+    parser.add_argument(
+        "--alpha",
+        default=None,
+        type=float,
+        help="alpha value for alpha-TIM"
     )
     args = parser.parse_args()
     main(args)
