@@ -147,7 +147,7 @@ class SSDGPACS(DatasetBase):
         labels = list(impath_label_dict.keys())
 
         # Original implementation
-        if imbalance == "uniform":
+        if imbalance == "original":
             num_labeled_per_cd = np.ones((num_domains, len(labels))) * num_labeled // (num_domains * len(labels))
 
         # Randomly assign number of labeled samples per class and domain

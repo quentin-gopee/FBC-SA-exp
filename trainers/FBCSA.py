@@ -230,12 +230,15 @@ class FBCSA(TrainerXU):
                     H_alpha = -(p_xu_k_aug * torch.log(p_xu_k_aug + 1e-9)).sum(dim=1).mean()
                     p_xu_k_marginal = p_xu_k_aug.mean(dim=0)
                     H_alpha_marginal = -(p_xu_k_marginal * torch.log(p_xu_k_marginal + 1e-9)).sum()
+                    H_alpha_loss += H_alpha # Entropy of Y given X
+                    H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
+                    mutual_info_loss += H_alpha - H_alpha_marginal
                 else:
                     H_alpha = (p_xu_k_aug ** self.alpha).sum(dim=1).mean()
                     H_alpha_marginal = p_xu_k_aug.mean(dim=0).pow(self.alpha).sum()
-                H_alpha_loss += H_alpha # Entropy of Y given X
-                H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
-                mutual_info_loss += (H_alpha - H_alpha_marginal) / (self.alpha - 1)
+                    H_alpha_loss += H_alpha # Entropy of Y given X
+                    H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
+                    mutual_info_loss += (H_alpha - H_alpha_marginal) / (self.alpha - 1)
 
         loss_summary = {}
 
@@ -263,7 +266,6 @@ class FBCSA(TrainerXU):
         # if loss_all contains NaN
         if (loss_all != loss_all).data.any():
             print("NaN detected in loss.")
-            breakpoint()
         
         self.model_backward_and_update(loss_all)
 
