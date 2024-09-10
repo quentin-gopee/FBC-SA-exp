@@ -68,7 +68,9 @@ def reset_cfg(cfg, args):
         cfg.TRAINER.FBASA.ALPHA = None
 
     if args.batch_size:
-        cfg.TRAINER.FBASA.BATCH_SIZE = args.batch_size*len(cfg.DATASET.SOURCE_DOMAINS)
+        cfg.DATALOADER.TRAIN_X.BATCH_SIZE = args.batch_size*len(cfg.DATASET.SOURCE_DOMAINS)
+        cfg.DATALOADER.TRAIN_U.BATCH_SIZE = args.batch_size*len(cfg.DATASET.SOURCE_DOMAINS)
+        print(f"Batch size: {cfg.DATALOADER.TRAIN_X.BATCH_SIZE}")
 
 
 def extend_cfg(cfg, args):
@@ -202,7 +204,7 @@ if __name__ == "__main__":
         help="alpha value for alpha-TIM"
     )
     parser.add_argument(
-        "--batch_size",
+        "--batch-size",
         default=None,
         type=int,
         help="number of samples per domain in a batch (total batch size = batch_size * num_domains)"
