@@ -15,6 +15,7 @@ import datasets.ssdg_officehome
 
 # trainers
 import trainers.FBCSA
+import trainers.MI
 
 
 def print_args(args, cfg):
@@ -66,6 +67,11 @@ def reset_cfg(cfg, args):
         cfg.TRAINER.FBASA.ALPHA = args.alpha
     else:
         cfg.TRAINER.FBASA.ALPHA = None
+
+    if args.lamb:
+        cfg.TRAINER.FBASA.LAMBDA = args.lamb
+    else:
+        cfg.TRAINER.FBASA.LAMBDA = None
 
     if args.batch_size:
         cfg.DATALOADER.TRAIN_X.BATCH_SIZE = args.batch_size*len(cfg.DATASET.SOURCE_DOMAINS)
@@ -202,6 +208,12 @@ if __name__ == "__main__":
         default=None,
         type=float,
         help="alpha value for alpha-TIM"
+    )
+    parser.add_argument(
+        "--lamb",
+        default=None,
+        type=float,
+        help="lambda value for lambda-TIM"
     )
     parser.add_argument(
         "--batch-size",
