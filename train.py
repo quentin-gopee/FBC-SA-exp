@@ -71,7 +71,7 @@ def reset_cfg(cfg, args):
     if args.lamb:
         cfg.TRAINER.FBASA.LAMBDA = args.lamb
     else:
-        cfg.TRAINER.FBASA.LAMBDA = None
+        cfg.TRAINER.FBASA.LAMBDA = 0
 
     if args.batch_size:
         cfg.DATALOADER.TRAIN_X.BATCH_SIZE = args.batch_size*len(cfg.DATASET.SOURCE_DOMAINS)

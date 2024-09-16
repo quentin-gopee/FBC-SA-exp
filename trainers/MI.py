@@ -47,7 +47,7 @@ class MI(TrainerXU):
             norm_mean = cfg.INPUT.PIXEL_MEAN
             norm_std = cfg.INPUT.PIXEL_STD
 
-        self.lamnbda = cfg.TRAINER.MI.LAMBDA
+        self.lambda_ = cfg.TRAINER.FBASA.LAMBDA
 
     def check_cfg(self, cfg):
         assert len(cfg.TRAINER.FBASA.STRONG_TRANSFORMS) > 0
@@ -178,8 +178,9 @@ class MI(TrainerXU):
         ####################
         # Marginal Entropy loss
         ####################
-        p_xu_marginal = p_xu.mean(0)
-        loss_marginal_entropy = - (p_xu_marginal * torch.log(p_xu_marginal + 1e-9)).sum()
+        if self.lambda_ > 0:
+            p_xu_marginal = p_xu.mean(0)
+            loss_marginal_entropy = - (p_xu_marginal * torch.log(p_xu_marginal + 1e-9)).sum()
 
         loss_summary = {}
 
@@ -190,7 +191,9 @@ class MI(TrainerXU):
         loss_all += loss_u_aug
         loss_summary["loss_u_aug"] = loss_u_aug.item()
 
-        loss_all += self.lambda_ * loss_marginal_entropy
+        if self.lambda_ > 0:
+            loss_all += self.lambda_ * loss_marginal_entropy
+            loss_summary["loss_marginal_entropy"] = loss_marginal_entropy.item()
 
         # if loss_all contains NaN
         if (loss_all != loss_all).data.any():
