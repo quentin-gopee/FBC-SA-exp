@@ -66,7 +66,7 @@ def reset_cfg(cfg, args):
     if args.alpha:
         cfg.TRAINER.FBASA.ALPHA = args.alpha
     else:
-        cfg.TRAINER.FBASA.ALPHA = None
+        cfg.TRAINER.FBASA.ALPHA = 1
 
     if args.lamb:
         cfg.TRAINER.FBASA.LAMBDA = args.lamb

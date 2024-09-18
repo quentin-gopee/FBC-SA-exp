@@ -48,6 +48,7 @@ class MI(TrainerXU):
             norm_std = cfg.INPUT.PIXEL_STD
 
         self.lambda_ = cfg.TRAINER.FBASA.LAMBDA
+        self.alpha = cfg.TRAINER.FBASA.ALPHA
 
     def check_cfg(self, cfg):
         assert len(cfg.TRAINER.FBASA.STRONG_TRANSFORMS) > 0
@@ -160,6 +161,7 @@ class MI(TrainerXU):
         # Unsupervised loss
         ####################
         loss_u_aug = 0
+        p_xu_aug = []
 
         for k in range(K):
             y_xu_k_pred = y_xu_pred[k]
@@ -171,6 +173,8 @@ class MI(TrainerXU):
             xu_k_aug = torch.cat([x_k_aug, u_k_aug], 0)
             f_xu_k_aug = self.G(xu_k_aug)
             z_xu_k_aug = self.C(f_xu_k_aug, stochastic=True)
+            p_xu_k_aug = F.softmax(z_xu_k_aug, 1)
+            p_xu_aug.append(p_xu_k_aug)
             loss = F.cross_entropy(z_xu_k_aug, y_xu_k_pred, reduction="none")
             loss = (loss * mask_xu_k).mean()
             loss_u_aug += loss
@@ -178,22 +182,22 @@ class MI(TrainerXU):
         ####################
         # Marginal Entropy loss
         ####################
-        if self.lambda_ > 0:
-            p_xu_marginal = p_xu.mean(0)
-            loss_marginal_entropy = - (p_xu_marginal * torch.log(p_xu_marginal + 1e-9)).sum()
+        p_xu_aug = torch.cat(p_xu_aug, 0)
+        p_xu_aug_marginal = p_xu_aug.mean(0)
+        loss_marginal_entropy = (p_xu_aug_marginal * torch.log(p_xu_aug_marginal + 1e-9)).sum()
 
         loss_summary = {}
 
         loss_all = 0
-        loss_all += loss_x
+        loss_all += 1/(1+self.epoch*self.lambda_) * loss_x
         loss_summary["loss_x"] = loss_x.item()
 
         loss_all += loss_u_aug
         loss_summary["loss_u_aug"] = loss_u_aug.item()
 
-        if self.lambda_ > 0:
-            loss_all += self.lambda_ * loss_marginal_entropy
-            loss_summary["loss_marginal_entropy"] = loss_marginal_entropy.item()
+        if self.alpha > 0:
+            loss_all += self.alpha * loss_marginal_entropy
+        loss_summary["loss_marginal_entropy"] = loss_marginal_entropy.item()
 
         # if loss_all contains NaN
         if (loss_all != loss_all).data.any():
