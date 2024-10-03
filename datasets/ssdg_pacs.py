@@ -7,7 +7,7 @@ from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
 
 
-@DATASET_REGISTRY.register()
+@DATASET_REGISTRY.register(force=True)
 class SSDGPACS(DatasetBase):
     """PACS.
 
@@ -49,12 +49,20 @@ class SSDGPACS(DatasetBase):
         src_domains = cfg.DATASET.SOURCE_DOMAINS
         tgt_domain = cfg.DATASET.TARGET_DOMAINS[0]
 
+        print(cfg.DATASET.SOURCE_DOMAINS)
+        print(cfg.DATASET.TARGET_DOMAINS)
+        print(cfg.DATASET.ONE_SOURCE_L)
+
         split_ssdg_path = osp.join(
             self.split_ssdg_dir, f"{tgt_domain}_nlab{num_labeled}_{cfg.TRAINER.FBASA.IMBALANCE}_seed{seed}.json"
         )
         if not osp.exists(split_ssdg_path):
             train_x, train_u = self._read_data_train(
-                    cfg.DATASET.SOURCE_DOMAINS, num_labeled, cfg.TRAINER.FBASA.IMBALANCE, cfg.TRAINER.FBASA.GAMMA
+                    cfg.DATASET.SOURCE_DOMAINS,
+                    num_labeled,
+                    cfg.TRAINER.FBASA.IMBALANCE,
+                    gamma=cfg.TRAINER.FBASA.GAMMA,
+                    one_source_l=cfg.DATASET.ONE_SOURCE_L
                 )
         else:
             train_x, train_u = self.read_json_train(
@@ -107,92 +115,38 @@ class SSDGPACS(DatasetBase):
 
         return train_x, train_u
 
-    @staticmethod
-    def write_json_train(filepath, src_domains, image_dir, train_x, train_u):
-        def _convert_to_list(items):
-            out = []
-            for item in items:
-                impath = item.impath
-                label = item.label
-                domain = item.domain
-                dname = src_domains[domain]
-                impath = impath.replace(image_dir, "")
-                if impath.startswith("/") or impath.startswith("\\"):
-                    impath = impath[1:]
-                out.append((impath, label, dname))
-            return out
+    # @staticmethod
+    # def write_json_train(filepath, src_domains, image_dir, train_x, train_u):
+    #     def _convert_to_list(items):
+    #         out = []
+    #         for item in items:
+    #             impath = item.impath
+    #             label = item.label
+    #             domain = item.domain
+    #             dname = src_domains[domain]
+    #             impath = impath.replace(image_dir, "")
+    #             if impath.startswith("/") or impath.startswith("\\"):
+    #                 impath = impath[1:]
+    #             out.append((impath, label, dname))
+    #         return out
 
-        train_x = _convert_to_list(train_x)
-        train_u = _convert_to_list(train_u)
-        output = {"train_x": train_x, "train_u": train_u}
+    #     train_x = _convert_to_list(train_x)
+    #     train_u = _convert_to_list(train_u)
+    #     output = {"train_x": train_x, "train_u": train_u}
 
-        write_json(output, filepath)
-        print(f'Saved the split to "{filepath}"')
+    #     write_json(output, filepath)
+    #     print(f'Saved the split to "{filepath}"')
 
-    def _read_data_train(self, input_domains, num_labeled, imbalance, gamma=None):
+    def _read_data_train(self, input_domains, num_labeled, imbalance, gamma=None, one_source_l=None):
         num_labeled_per_cd = None
         num_unlabeled_per_cd = None
         num_domains = len(input_domains)
         items_x, items_u = [], []
 
-        # Get number of labels
-        file = osp.join(self.split_dir, input_domains[0] + "_train_kfold.txt")
-        impath_label_list = self._read_split_pacs(file)
-
-        impath_label_dict = defaultdict(list)
-
-        for impath, label in impath_label_list:
-            impath_label_dict[label].append((impath, label))
-
-        labels = list(impath_label_dict.keys())
-
-        # Original implementation
-        if imbalance == "original":
-            num_labeled_per_cd = np.ones((num_domains, len(labels))) * num_labeled // (num_domains * len(labels))
-
-        # Randomly assign number of labeled samples per class and domain
-        elif imbalance == "random":
-            num_labeled_per_domain = num_labeled // num_domains
-            num_labeled_per_cd = []
-            for d in range(num_domains):
-                num_labeled_per_cd.append(self.random_numbers(num_labeled_per_domain, len(labels)))
-
-        # Exponential (long-tail) imbalance on both labeled and unlabeled samples
-        elif imbalance == "exp":
-            num_labeled_per_domain = num_labeled // num_domains
-            num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
-
-            random.shuffle(labels) # randomize the majority class
-            m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_cd[labels[0]]*num_domains
-            num_unlabeled_per_cd = self.exp_imbalance_u(m1, len(labels), gamma)
-
-            num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
-            num_unlabeled_per_cd = [[num_unlabeled_per_cd[label] for label in labels] for _ in range(num_domains)]
-
-        # Exponential (long-tail) imbalance on labeled samples only
-        elif imbalance == "exp_l_only":
-            num_labeled_per_domain = num_labeled // num_domains
-            num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
-            random.shuffle(labels) # randomize the majority class
-            num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
-
-        # Uniform distribution with the same number of unlabeled samples as in the exponential imbalance to compare both settings
-        elif imbalance == "uniform_exp_like":
-            num_labeled_per_domain = num_labeled // num_domains
-            num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
-
-            random.shuffle(labels) # randomize the majority class
-            m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_cd[labels[0]]*num_domains
-            num_unlabeled_per_cd = self.exp_imbalance_u(m1, len(labels), gamma)
-
-            num_labeled_per_cd = np.ones((num_domains, len(labels))) * num_labeled // (num_domains * len(labels))
-            num_unlabeled_per_cd = np.ones((num_domains, len(labels))) * np.sum(num_unlabeled_per_cd) // (num_domains * len(labels))
-
-        else:
-            raise ValueError(f"Unknown imbalance type: {imbalance}")
-
-        for domain, dname in enumerate(input_domains):
-            file = osp.join(self.split_dir, dname + "_train_kfold.txt")
+        # Labelled samples come from all source domains
+        if one_source_l is None:
+            # Get number of labels
+            file = osp.join(self.split_dir, input_domains[0] + "_train_kfold.txt")
             impath_label_list = self._read_split_pacs(file)
 
             impath_label_dict = defaultdict(list)
@@ -200,24 +154,138 @@ class SSDGPACS(DatasetBase):
             for impath, label in impath_label_list:
                 impath_label_dict[label].append((impath, label))
 
-            labels = list(impath_label_dict.keys())            
+            labels = list(impath_label_dict.keys())
 
-            for label in labels:
-                pairs = impath_label_dict[label]
-                assert len(pairs) >= num_labeled_per_cd[domain][label], "Not enough labeled data for class {} in domain {}".format(label, dname)
-                random.shuffle(pairs)
+            # Original implementation
+            if imbalance == "original":
+                num_labeled_per_cd = np.ones((num_domains, len(labels))) * num_labeled // (num_domains * len(labels))
 
-                for i, (impath, label) in enumerate(pairs):
-                    item = Datum(impath=impath, label=label, domain=domain)
-                    if (i + 1) <= num_labeled_per_cd[domain][label]:
-                        items_x.append(item)
-                    elif num_unlabeled_per_cd is not None:
-                        if (i + 1) <= num_labeled_per_cd[domain][label] + num_unlabeled_per_cd[domain][label]:
+            # Randomly assign number of labeled samples per class and domain
+            elif imbalance == "random":
+                num_labeled_per_domain = num_labeled // num_domains
+                num_labeled_per_cd = []
+                for d in range(num_domains):
+                    num_labeled_per_cd.append(self.random_numbers(num_labeled_per_domain, len(labels)))
+
+            # Exponential (long-tail) imbalance on both labeled and unlabeled samples
+            elif imbalance == "exp":
+                num_labeled_per_domain = num_labeled // num_domains
+                num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+
+                random.shuffle(labels) # randomize the majority class
+                m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_cd[labels[0]]*num_domains
+                num_unlabeled_per_cd = self.exp_imbalance_u(m1, len(labels), gamma)
+
+                num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
+                num_unlabeled_per_cd = [[num_unlabeled_per_cd[label] for label in labels] for _ in range(num_domains)]
+
+            # Exponential (long-tail) imbalance on labeled samples only
+            elif imbalance == "exp_l_only":
+                num_labeled_per_domain = num_labeled // num_domains
+                num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+                random.shuffle(labels) # randomize the majority class
+                num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
+
+            # Uniform distribution with the same number of unlabeled samples as in the exponential imbalance to compare both settings
+            elif imbalance == "uniform_exp_like":
+                num_labeled_per_domain = num_labeled // num_domains
+                num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+
+                random.shuffle(labels) # randomize the majority class
+                m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_cd[labels[0]]*num_domains
+                num_unlabeled_per_cd = self.exp_imbalance_u(m1, len(labels), gamma)
+
+                num_labeled_per_cd = np.ones((num_domains, len(labels))) * num_labeled // (num_domains * len(labels))
+                num_unlabeled_per_cd = np.ones((num_domains, len(labels))) * np.sum(num_unlabeled_per_cd) // (num_domains * len(labels))
+
+            else:
+                raise ValueError(f"Unknown imbalance type for all sources labelled: {imbalance}")
+            
+            for domain, dname in enumerate(input_domains):
+                file = osp.join(self.split_dir, dname + "_train_kfold.txt")
+                impath_label_list = self._read_split_pacs(file)
+
+                impath_label_dict = defaultdict(list)
+
+                for impath, label in impath_label_list:
+                    impath_label_dict[label].append((impath, label))
+
+                labels = list(impath_label_dict.keys())            
+
+                for label in labels:
+                    pairs = impath_label_dict[label]
+                    assert len(pairs) >= num_labeled_per_cd[domain][label], "Not enough labeled data for class {} in domain {}".format(label, dname)
+                    random.shuffle(pairs)
+
+                    for i, (impath, label) in enumerate(pairs):
+                        item = Datum(impath=impath, label=label, domain=domain)
+                        if (i + 1) <= num_labeled_per_cd[domain][label]:
+                            items_x.append(item)
+                        elif num_unlabeled_per_cd is not None:
+                            if (i + 1) <= num_labeled_per_cd[domain][label] + num_unlabeled_per_cd[domain][label]:
+                                items_u.append(item)
+                        else:
                             items_u.append(item)
-                    else:
-                        items_u.append(item)
 
-        return items_x, items_u
+            return items_x, items_u
+            
+        else:
+            assert one_source_l in input_domains, "Labelled source domain not in the input domains"
+
+            # Get number of labels
+            file = osp.join(self.split_dir, input_domains[0] + "_train_kfold.txt")
+            impath_label_list = self._read_split_pacs(file)
+
+            impath_label_dict = defaultdict(list)
+
+            for impath, label in impath_label_list:
+                impath_label_dict[label].append((impath, label))
+
+            labels = list(impath_label_dict.keys())
+
+            # Original implementation
+            if imbalance == "original":
+                num_labeled_per_class = np.ones(len(labels)) * num_labeled // len(labels)
+
+            # Randomly assign number of labeled samples per class and domain
+            elif imbalance == "random":
+                num_labeled_per_class = self.random_numbers(num_labeled, len(labels))
+
+            # Exponential (long-tail) imbalance on labeled samples only
+            elif imbalance == "exp_l_only":
+                num_labeled_per_class = self.exp_imbalance_l(num_labeled, len(labels), gamma)
+                random.shuffle(labels) # randomize the majority class
+                num_labeled_per_class = [num_labeled_per_class[label] for label in labels]
+
+            else:
+                raise ValueError(f"Unknown imbalance type for one_source_l: {imbalance}")
+            
+            for domain, dname in enumerate(input_domains):
+                file = osp.join(self.split_dir, dname + "_train_kfold.txt")
+                impath_label_list = self._read_split_pacs(file)
+
+                impath_label_dict = defaultdict(list)
+
+                for impath, label in impath_label_list:
+                    impath_label_dict[label].append((impath, label))
+
+                labels = list(impath_label_dict.keys())            
+
+                for label in labels:
+                    pairs = impath_label_dict[label]
+                    if dname == one_source_l:
+                        assert len(pairs) >= num_labeled_per_class[label], "Not enough labeled data for class {} in domain {}".format(label, dname)
+                    random.shuffle(pairs)
+
+                    for i, (impath, label) in enumerate(pairs):
+                        item = Datum(impath=impath, label=label, domain=domain)
+                        if dname == one_source_l and (i + 1) <= num_labeled_per_class[label]:
+                            items_x.append(item)
+                        else:
+                            items_u.append(item)
+
+            return items_x, items_u
+        
 
     def _read_data_test(self, input_domains, split):
         items = []
