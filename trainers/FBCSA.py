@@ -223,22 +223,22 @@ class FBCSA(TrainerXU):
             loss_sim = (loss_sim * mask_xu_k).mean()
             loss_u_sim += loss_sim * 0.5
 
-            # Mutual Information Loss
-            if self.alpha:
-                p_xu_k_aug = F.softmax(z_xu_k_aug, dim=1)
-                if self.alpha == 1:
-                    H_alpha = -(p_xu_k_aug * torch.log(p_xu_k_aug + 1e-9)).sum(dim=1).mean()
-                    p_xu_k_marginal = p_xu_k_aug.mean(dim=0)
-                    H_alpha_marginal = -(p_xu_k_marginal * torch.log(p_xu_k_marginal + 1e-9)).sum()
-                    H_alpha_loss += H_alpha # Entropy of Y given X
-                    H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
-                    mutual_info_loss += H_alpha - H_alpha_marginal
-                else:
-                    H_alpha = (p_xu_k_aug ** self.alpha).sum(dim=1).mean()
-                    H_alpha_marginal = p_xu_k_aug.mean(dim=0).pow(self.alpha).sum()
-                    H_alpha_loss += H_alpha # Entropy of Y given X
-                    H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
-                    mutual_info_loss += (H_alpha - H_alpha_marginal) / (self.alpha - 1)
+            # # Mutual Information Loss
+            # if self.alpha:
+            #     p_xu_k_aug = F.softmax(z_xu_k_aug, dim=1)
+            #     if self.alpha == 1:
+            #         H_alpha = -(p_xu_k_aug * torch.log(p_xu_k_aug + 1e-9)).sum(dim=1).mean()
+            #         p_xu_k_marginal = p_xu_k_aug.mean(dim=0)
+            #         H_alpha_marginal = -(p_xu_k_marginal * torch.log(p_xu_k_marginal + 1e-9)).sum()
+            #         H_alpha_loss += H_alpha # Entropy of Y given X
+            #         H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
+            #         mutual_info_loss += H_alpha - H_alpha_marginal
+            #     else:
+            #         H_alpha = (p_xu_k_aug ** self.alpha).sum(dim=1).mean()
+            #         H_alpha_marginal = p_xu_k_aug.mean(dim=0).pow(self.alpha).sum()
+            #         H_alpha_loss += H_alpha # Entropy of Y given X
+            #         H_alpha_marginal_loss += H_alpha_marginal # Entropy of Y
+            #         mutual_info_loss += (H_alpha - H_alpha_marginal) / (self.alpha - 1)
 
         loss_summary = {}
 
@@ -255,13 +255,13 @@ class FBCSA(TrainerXU):
         loss_all += loss_u_sim
         loss_summary["loss_SA"] = loss_u_sim.item()
 
-        if self.alpha:
-            loss_all -= mutual_info_loss  # Subtract mutual information loss
-            loss_summary["mutual_info_loss"] = mutual_info_loss.item()
+        # if self.alpha:
+        #     loss_all -= mutual_info_loss  # Subtract mutual information loss
+        #     loss_summary["mutual_info_loss"] = mutual_info_loss.item()
 
-            # log H_alpha and H_alpha_marginal
-            loss_summary["H_alpha"] = H_alpha_loss.item()
-            loss_summary["H_alpha_marginal"] = H_alpha_marginal_loss.item()
+        #     # log H_alpha and H_alpha_marginal
+        #     loss_summary["H_alpha"] = H_alpha_loss.item()
+        #     loss_summary["H_alpha_marginal"] = H_alpha_marginal_loss.item()
 
         # if loss_all contains NaN
         if (loss_all != loss_all).data.any():
