@@ -73,8 +73,8 @@ def reset_cfg(cfg, args):
     else:
         cfg.TRAINER.FBASA.LAMBDA = 0
 
-    if args.one_source_domain:
-        cfg.DATASET.ONE_SOURCE_L = args.one_source_domain
+    if args.one_source_l:
+        cfg.DATASET.ONE_SOURCE_L = args.one_source_l
     else:
         cfg.DATASET.ONE_SOURCE_L = None
 
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         help="number of samples per domain in a batch (total batch size = batch_size * num_domains)"
     )
     parser.add_argument(
-        "--one_source_domain",
+        "--one-source-l",
         default=None,
         type=str,
         help="name of the labelled source domain if only one source domain is used"
