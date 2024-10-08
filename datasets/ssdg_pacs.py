@@ -7,7 +7,7 @@ from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
 
 
-@DATASET_REGISTRY.register(force=True)
+@DATASET_REGISTRY.register()
 class SSDGPACS(DatasetBase):
     """PACS.
 
@@ -138,8 +138,6 @@ class SSDGPACS(DatasetBase):
     #     print(f'Saved the split to "{filepath}"')
 
     def _read_data_train(self, input_domains, num_labeled, imbalance, gamma=None, one_source_l=None):
-        num_labeled_per_cd = None
-        num_unlabeled_per_cd = None
         num_domains = len(input_domains)
         items_x, items_u = [], []
 

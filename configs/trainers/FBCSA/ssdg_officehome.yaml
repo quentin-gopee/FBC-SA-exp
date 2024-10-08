@@ -21,9 +21,13 @@ TRAIN:
 
 TRAINER:
   FBASA:
-    STRONG_TRANSFORMS: ["random_flip", "randaugment_fixmatch", "normalize", "cutout"]
+    STRONG_TRANSFORMS:
+      ["random_flip", "randaugment_fixmatch", "normalize", "cutout"]
     C_OPTIM:
       NAME: "sgd"
       LR: 0.01
       MAX_EPOCH: 20
       LR_SCHEDULER: "cosine"
+
+TEST:
+  PER_CLASS_RESULT: True
