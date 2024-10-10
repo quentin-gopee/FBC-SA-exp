@@ -6,8 +6,10 @@ import numpy as np
 from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing, read_json, write_json
 
+from .utils import random_numbers, exp_imbalance_l, exp_imbalance_u, count_classes
 
-@DATASET_REGISTRY.register()
+
+@DATASET_REGISTRY.register(force=True)
 class SSDGPACS(DatasetBase):
     """PACS.
 
@@ -77,9 +79,9 @@ class SSDGPACS(DatasetBase):
 
         # Print class distribution
         print("Class distribution in the labeled training set:")
-        print(self.count_classes(train_x))
+        print(count_classes(train_x))
         print("Class distribution in the unlabeled training set:")
-        print(self.count_classes(train_u))
+        print(count_classes(train_u))
 
         super().__init__(train_x=train_x, train_u=train_u, val=val, test=test)
 
@@ -141,6 +143,10 @@ class SSDGPACS(DatasetBase):
         num_domains = len(input_domains)
         items_x, items_u = [], []
 
+        num_labeled_per_cd = None
+        num_unlabeled_per_cd = None
+        num_labeled_per_class = None
+
         # Labelled samples come from all source domains
         if one_source_l is None:
             # Get number of labels
@@ -163,16 +169,16 @@ class SSDGPACS(DatasetBase):
                 num_labeled_per_domain = num_labeled // num_domains
                 num_labeled_per_cd = []
                 for d in range(num_domains):
-                    num_labeled_per_cd.append(self.random_numbers(num_labeled_per_domain, len(labels)))
+                    num_labeled_per_cd.append(random_numbers(num_labeled_per_domain, len(labels)))
 
             # Exponential (long-tail) imbalance on both labeled and unlabeled samples
             elif imbalance == "exp":
                 num_labeled_per_domain = num_labeled // num_domains
-                num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+                num_labeled_per_cd = exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
 
                 random.shuffle(labels) # randomize the majority class
                 m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_cd[labels[0]]*num_domains
-                num_unlabeled_per_cd = self.exp_imbalance_u(m1, len(labels), gamma)
+                num_unlabeled_per_cd = exp_imbalance_u(m1, len(labels), gamma)
 
                 num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
                 num_unlabeled_per_cd = [[num_unlabeled_per_cd[label] for label in labels] for _ in range(num_domains)]
@@ -180,18 +186,18 @@ class SSDGPACS(DatasetBase):
             # Exponential (long-tail) imbalance on labeled samples only
             elif imbalance == "exp_l_only":
                 num_labeled_per_domain = num_labeled // num_domains
-                num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+                num_labeled_per_cd = exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
                 random.shuffle(labels) # randomize the majority class
                 num_labeled_per_cd = [[num_labeled_per_cd[label] for label in labels] for _ in range(num_domains)]
 
             # Uniform distribution with the same number of unlabeled samples as in the exponential imbalance to compare both settings
             elif imbalance == "uniform_exp_like":
                 num_labeled_per_domain = num_labeled // num_domains
-                num_labeled_per_cd = self.exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
+                num_labeled_per_cd = exp_imbalance_l(num_labeled_per_domain, len(labels), gamma)
 
                 random.shuffle(labels) # randomize the majority class
                 m1 = len(impath_label_dict[labels[0]]) - num_labeled_per_cd[labels[0]]*num_domains
-                num_unlabeled_per_cd = self.exp_imbalance_u(m1, len(labels), gamma)
+                num_unlabeled_per_cd = exp_imbalance_u(m1, len(labels), gamma)
 
                 num_labeled_per_cd = np.ones((num_domains, len(labels))) * num_labeled // (num_domains * len(labels))
                 num_unlabeled_per_cd = np.ones((num_domains, len(labels))) * np.sum(num_unlabeled_per_cd) // (num_domains * len(labels))
@@ -247,11 +253,11 @@ class SSDGPACS(DatasetBase):
 
             # Randomly assign number of labeled samples per class and domain
             elif imbalance == "random":
-                num_labeled_per_class = self.random_numbers(num_labeled, len(labels))
+                num_labeled_per_class = random_numbers(num_labeled, len(labels))
 
             # Exponential (long-tail) imbalance on labeled samples only
             elif imbalance == "exp_l_only":
-                num_labeled_per_class = self.exp_imbalance_l(num_labeled, len(labels), gamma)
+                num_labeled_per_class = exp_imbalance_l(num_labeled, len(labels), gamma)
                 random.shuffle(labels) # randomize the majority class
                 num_labeled_per_class = [num_labeled_per_class[label] for label in labels]
 
@@ -320,52 +326,3 @@ class SSDGPACS(DatasetBase):
                 items.append((impath, label))
 
         return items
-    
-    def random_numbers(self, n_sum, n_numbers):
-        '''
-        Generates a list of n_numbers random numbers between 1 and num_sum-n_numbers that sum to n_num
-        '''
-        rand_num = np.sort(random.sample(range(1, n_sum), n_numbers-1))
-        num_labeled_per_class = [rand_num[0]] + [rand_num[i] - rand_num[i-1] for i in range(1, len(rand_num))] + [n_sum-rand_num[-1]]
-        return num_labeled_per_class
-    
-    def exp_imbalance_l(self, N, C, gamma):
-        '''
-        N: total number of samples
-        C: number of classes
-        gamma: imbalance ratio
-
-        return: list of number of samples per class with exponential imbalance
-        '''
-        n1 = N*(1-gamma**(-1/(C-1)))/(1-gamma**(-C/(C-1)))
-        n_samples = []
-
-        for i in range(C):
-            n_samples.append(int(n1*gamma**(-i/(C-1))))
-
-        # add remaining samples to the first classes
-        for i in range(N-sum(n_samples)):
-            n_samples[i] += 1
-
-        return n_samples
-    
-    def exp_imbalance_u(self, m1, C, gamma):
-        '''
-        m1: number of samples in the majority class
-        C: number of classes
-        gamma: imbalance ratio
-
-        return: list of number of samples per class with exponential imbalance
-        '''
-        n_samples = []
-
-        for i in range(C):
-            n_samples.append(int(m1*gamma**(-i/(C-1))))
-
-        return n_samples
-
-    def count_classes(self, items):
-        class_count = defaultdict(int)
-        for item in items:
-            class_count[item.label] += 1
-        return class_count

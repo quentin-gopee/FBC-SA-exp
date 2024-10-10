@@ -6,41 +6,63 @@ import numpy as np
 
 from dassl.utils import listdir_nohidden
 from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
-from dassl.utils import mkdir_if_missing
+from dassl.utils import mkdir_if_missing, read_json, write_json
 
 from .utils import random_numbers, exp_imbalance_l, count_classes
 
 
 @DATASET_REGISTRY.register(force=True)
-class SSDGOfficeHome(DatasetBase):
-    """Office-Home.
+class SSDGDigitsDG(DatasetBase):
+    """Digits-DG.
 
-    Statistics:
-        - 4 domains: Art, Clipart, Product, Real world.
-        - 65 categories.
+    It contains 4 digit datasets:
+        - MNIST: hand-written digits.
+        - MNIST-M: variant of MNIST with blended background.
+        - SVHN: street view house number.
+        - SYN: synthetic digits.
 
     Reference:
-        - Venkateswara et al. Deep Hashing Network for Unsupervised
-        Domain Adaptation. CVPR 2017.
-        - Zhou et al. Semi-Supervised Domain Generalization with
-        Stochastic StyleMatch. ArXiv preprint, 2021.
+        - Lecun et al. Gradient-based learning applied to document
+        recognition. IEEE 1998.
+        - Ganin et al. Domain-adversarial training of neural networks.
+        JMLR 2016.
+        - Netzer et al. Reading digits in natural images with unsupervised
+        feature learning. NIPS-W 2011.
+        - Zhou et al. Deep Domain-Adversarial Image Generation for Domain
+        Generalisation. AAAI 2020.
     """
 
-    dataset_dir = "office_home_dg"
-    domains = ["art", "clipart", "product", "real_world"]
-    data_url = "https://drive.google.com/uc?id=1gkbf_KaxoBws-GWT3XIPZ7BnkqbAxIFa"
+    dataset_dir = "digits_dg"
+    domains = ["mnist", "mnist_m", "svhn", "syn"]
+    data_url = "https://drive.google.com/uc?id=15V7EsHfCcfbKgsDmzQKj_DfXt_XYp_P7"
 
     def __init__(self, cfg):
         root = osp.abspath(osp.expanduser(cfg.DATASET.ROOT))
         self.dataset_dir = osp.join(root, self.dataset_dir)
+        self.image_dir = osp.join(self.dataset_dir, "images")
+        self.split_dir = osp.join(self.dataset_dir, "splits")
         self.split_ssdg_dir = osp.join(self.dataset_dir, "splits_ssdg")
         mkdir_if_missing(self.split_ssdg_dir)
 
         if not osp.exists(self.dataset_dir):
-            dst = osp.join(root, "office_home_dg.zip")
+            dst = osp.join(root, "digits_dg.zip")
             self.download_data(self.data_url, dst, from_gdrive=True)
 
-        self.check_input_domains(cfg.DATASET.SOURCE_DOMAINS, cfg.DATASET.TARGET_DOMAINS)
+        self.check_input_domains(
+            cfg.DATASET.SOURCE_DOMAINS, cfg.DATASET.TARGET_DOMAINS
+        )
+
+        # train = self.read_data(
+        #     self.dataset_dir, cfg.DATASET.SOURCE_DOMAINS, "train"
+        # )
+        # val = self.read_data(
+        #     self.dataset_dir, cfg.DATASET.SOURCE_DOMAINS, "val"
+        # )
+        # test = self.read_data(
+        #     self.dataset_dir, cfg.DATASET.TARGET_DOMAINS, "all"
+        # )
+
+        # super().__init__(train_x=train, val=val, test=test)
 
         seed = cfg.SEED
         num_labeled = cfg.DATASET.NUM_LABELED
@@ -78,33 +100,7 @@ class SSDGOfficeHome(DatasetBase):
 
         super().__init__(train_x=train_x, train_u=train_u, val=val, test=test)
 
-    # def _read_data_train(self, input_domains, split, num_labeled):
-    #     items_x, items_u = [], []
-    #     num_labeled_per_class = None
-    #     num_domains = len(input_domains)
-
-    #     for domain, dname in enumerate(input_domains):
-    #         path = osp.join(self.dataset_dir, dname, split)
-    #         folders = listdir_nohidden(path, sort=True)
-
-    #         if num_labeled_per_class is None:
-    #             num_labeled_per_class = num_labeled / (num_domains * len(folders))
-
-    #         for label, folder in enumerate(folders):
-    #             impaths = glob.glob(osp.join(path, folder, "*.jpg"))
-    #             assert len(impaths) >= num_labeled_per_class
-    #             random.shuffle(impaths)
-
-    #             for i, impath in enumerate(impaths):
-    #                 item = Datum(impath=impath, label=label, domain=domain)
-    #                 if (i + 1) <= num_labeled_per_class:
-    #                     items_x.append(item)
-    #                 else:
-    #                     items_u.append(item)
-
-    #     return items_x, items_u
     
-
     def _read_data_train(self, input_domains, split, num_labeled, imbalance, gamma=None, one_source_l=None):
         num_domains = len(input_domains)
         items_x, items_u = [], []
@@ -112,7 +108,7 @@ class SSDGOfficeHome(DatasetBase):
         # Labelled samples come from all source domains
         if one_source_l is None:
             # Get number of labels
-            path = osp.join(self.dataset_dir, input_domains[0], split)
+            path = osp.join(self.image_dir, input_domains[0], split)
             folders = listdir_nohidden(path, sort=True)
             labels = np.arange(len(folders))
 
@@ -120,7 +116,7 @@ class SSDGOfficeHome(DatasetBase):
             min_distribution = [
                 min(
                     [
-                        len(glob.glob(osp.join(self.dataset_dir, domain, split, folder, "*.jpg")))
+                        len(glob.glob(osp.join(self.image_dir, domain, split, folder, "*.jpg")))
                     for domain in input_domains]
                 )
             for folder in folders]
@@ -158,7 +154,7 @@ class SSDGOfficeHome(DatasetBase):
                 num_labeled_per_cd = [num_labeled_per_cd_tmp for _ in range(num_domains)]
             
             for domain, dname in enumerate(input_domains):
-                path = osp.join(self.dataset_dir, dname, split)
+                path = osp.join(self.image_dir, dname, split)
                 folders = listdir_nohidden(path, sort=True)
 
                 for label, folder in enumerate(folders):
@@ -179,13 +175,13 @@ class SSDGOfficeHome(DatasetBase):
             assert one_source_l in input_domains, "Labelled source domain not in the input domains"
 
             # Get number of labels
-            path = osp.join(self.dataset_dir, input_domains[0], split)
+            path = osp.join(self.image_dir, input_domains[0], split)
             folders = listdir_nohidden(path, sort=True)
             labels = np.arange(len(folders))
 
             # Get the number of samples in each category/domain
             distribution = [
-                len(glob.glob(osp.join(self.dataset_dir, one_source_l, split, folder, "*.jpg")))
+                len(glob.glob(osp.join(self.image_dir, one_source_l, split, folder, "*.jpg")))
                 for folder in folders
             ]
 
@@ -220,7 +216,7 @@ class SSDGOfficeHome(DatasetBase):
                 raise ValueError(f"Unknown imbalance type for one_source_l: {imbalance}")
             
             for domain, dname in enumerate(input_domains):
-                path = osp.join(self.dataset_dir, dname, split)
+                path = osp.join(self.image_dir, dname, split)
                 folders = listdir_nohidden(path, sort=True)
 
                 for label, folder in enumerate(folders):
@@ -240,27 +236,9 @@ class SSDGOfficeHome(DatasetBase):
 
 
     def _read_data_test(self, input_domains, split):
-        items = []
 
-        for domain, dname in enumerate(input_domains):
-            if split == "all":
-                file_train = osp.join(self.split_dir, dname + "_train_kfold.txt")
-                impath_label_list = self._read_split_pacs(file_train)
-                file_val = osp.join(self.split_dir, dname + "_crossval_kfold.txt")
-                impath_label_list += self._read_split_pacs(file_val)
-            else:
-                file = osp.join(self.split_dir, dname + "_" + split + "_kfold.txt")
-                impath_label_list = self._read_split_pacs(file)
-
-            for impath, label in impath_label_list:
-                item = Datum(impath=impath, label=label, domain=domain)
-                items.append(item)
-
-        return items
-
-    def _read_data_test(self, input_domains, split):
         def _load_data_from_directory(directory):
-            folders = listdir_nohidden(directory, sort=True)
+            folders = listdir_nohidden(directory)
             folders.sort()
             items_ = []
 
@@ -276,16 +254,21 @@ class SSDGOfficeHome(DatasetBase):
 
         for domain, dname in enumerate(input_domains):
             if split == "all":
-                train_dir = osp.join(self.dataset_dir, dname, "train")
+                train_dir = osp.join(self.image_dir, dname, "train")
                 impath_label_list = _load_data_from_directory(train_dir)
-                val_dir = osp.join(self.dataset_dir, dname, "val")
+                val_dir = osp.join(self.image_dir, dname, "val")
                 impath_label_list += _load_data_from_directory(val_dir)
             else:
-                split_dir = osp.join(self.dataset_dir, dname, split)
+                split_dir = osp.join(self.image_dir, dname, split)
                 impath_label_list = _load_data_from_directory(split_dir)
 
             for impath, label in impath_label_list:
-                item = Datum(impath=impath, label=label, domain=domain)
+                item = Datum(
+                    impath=impath,
+                    label=label,
+                    domain=domain,
+                    classname=label
+                )
                 items.append(item)
 
         return items
