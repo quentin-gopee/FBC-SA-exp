@@ -12,6 +12,7 @@ import copy
 # datasets
 import datasets.ssdg_pacs
 import datasets.ssdg_officehome
+import datasets.ssdg_digits_dg
 
 # trainers
 import trainers.FBCSA
